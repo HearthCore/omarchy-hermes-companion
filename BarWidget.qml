@@ -38,6 +38,7 @@ BarWidget {
   readonly property bool muted: !!st.muted
   readonly property bool thinking: st.thinking !== false
   readonly property bool toasts: st.toasts !== false
+  property bool actions: st.actions === true
   readonly property var remarks: st.remarks || []
   readonly property var visionCfg: st.vision || ({})
   readonly property var reasoningCfg: st.reasoning || ({})
@@ -54,6 +55,7 @@ BarWidget {
       case "thinking": return "󰔟"
       case "speaking": return "󰔊"
       case "listening-request": return "󰍬"
+      case "approval": return "󰆍"
       case "paused": return "󰈉"
       default: return eyes ? "󰛐" : "󰈉"
     }
@@ -61,6 +63,7 @@ BarWidget {
   readonly property color glyphColor: {
     if (status === "offline") return Qt.darker(bar.barForeground, 2.0)
     if (status === "error" || status === "no-hermes") return bar.urgent
+    if (status === "approval") return Color.urgent
     if (status === "thinking" || status === "speaking" || status === "listening-request") return Color.accent
     return bar.barForeground
   }
@@ -331,6 +334,7 @@ BarWidget {
         Button { text: root.eyes ? "󰛐 Eyes on" : "󰈉 Eyes off"; foreground: root.bar.foreground; selected: root.eyes; onClicked: root.control("toggle-eyes") }
         Button { text: root.muted ? "󰖁 Quiet" : "󰕾 Talks"; foreground: root.bar.foreground; selected: !root.muted; onClicked: root.control("toggle-mute") }
         Button { text: root.toasts ? "󰍡 Toasts" : "󰍥 Toasts"; foreground: root.bar.foreground; selected: root.toasts; tooltipText: "On-screen output toasts"; onClicked: root.control("toggle-toasts") }
+        Button { text: "󰆍 Actions"; foreground: root.bar.foreground; selected: root.actions; tooltipText: "Let requests run commands via a helper subagent (risky ones ask first)"; onClicked: root.control("toggle-actions") }
       }
       Row {
         spacing: Style.space(6)

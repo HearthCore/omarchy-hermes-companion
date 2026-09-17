@@ -17,6 +17,7 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 
 from state import ControlServer, State  # noqa: E402
+from actions import Approver, audit, install_hook, parse_yes_no  # noqa: E402
 
 try:
     from brain import CompanionAgent, ModelSpec  # noqa: E402
@@ -46,6 +47,7 @@ DEFAULTS = {
     "urgent_gap_seconds": 60,
     "max_per_hour": 8,
     "notify": True,
+    "actions": False,   # let voice/text requests delegate shell/file work to a Hermes subagent
 }
 
 
@@ -106,7 +108,9 @@ class Companion:
             self._persist_cfg({"vision": cfg["vision"]})
         self.agent = self._build_agent()
         self._publish_models()
+        self.state.update(actions=bool(cfg.get("actions")))
         self.voice = None
+        self.approver = None
         self._stop = threading.Event()
         self._speak_lock = threading.Lock()
         self._stuck_ticks = 0
@@ -118,6 +122,43 @@ class Companion:
         if s in ("listening", "watching"):
             s = "watching" if self.state.get("eyes") else "paused"
         self.state.update(status=s)
+
+    # ------------------------------------------------------------ actions
+    def _install_approver(self):
+        """Route Hermes' dangerous-command gate (child agents included) to toast + voice."""
+        from tools import delegate_tool_config
+        from tools.terminal_tool import set_approval_callback
+
+        self.approver = Approver(
+            toast=lambda text, kind, note: self.state.toast(text, kind, note),
+            speak=self.say,
+            listen_yes_no=self._listen_yes_no,
+            set_status=self.set_status,
+        )
+        set_approval_callback(self.approver)
+        # Subagent worker threads normally get an auto-deny callback (delegation.subagent_auto_approve);
+        # in this process the human is reachable through toast + voice, so route them to the approver.
+        # delegate_tool_child_run imports the getter from tools.delegate_tool, so patch it there too.
+        from tools import delegate_tool
+        delegate_tool_config._get_subagent_approval_callback = lambda: self.approver
+        delegate_tool._get_subagent_approval_callback = lambda: self.approver
+        install_hook()   # tier-5 block / tier-4 escalate for terminal + file tools
+        os.environ["HERMES_INTERACTIVE"] = "1"   # tells Hermes' gate a human can answer
+
+    def _listen_yes_no(self, timeout: float):
+        if not self.voice:
+            return None
+        return self.voice.listen_for(timeout, parse_yes_no)
+
+    def set_actions(self, enabled: bool) -> str:
+        self.cfg["actions"] = bool(enabled)
+        self._persist_cfg({"actions": bool(enabled)})
+        new = self._build_agent()
+        new.history = list(self.agent.history)
+        self.agent = new
+        self.state.update(actions=bool(enabled))
+        audit({"kind": "actions", "enabled": bool(enabled)})
+        return f"actions={'on' if enabled else 'off'}"
 
     # ------------------------------------------------------------ voice
     def start_voice(self):
@@ -253,7 +294,7 @@ class Companion:
     def _build_agent(self) -> CompanionAgent:
         v = _spec(self.cfg["vision"])
         r = _spec(self.cfg["reasoning"]) if self.cfg["reasoning"]["model"] else None
-        return CompanionAgent(v, r, self.cfg["user_name"])
+        return CompanionAgent(v, r, self.cfg["user_name"], actions=bool(self.cfg.get("actions")))
 
     def set_role(self, role: str, model: str | None = None, effort: str | None = None, thinking: bool | None = None) -> str:
         if role not in ("vision", "reasoning"):
@@ -343,6 +384,13 @@ class Companion:
             v = not self.state.get("muted")
             self.state.update(muted=v)
             return f"muted={'on' if v else 'off'}"
+        if op == "toggle-actions":
+            return self.set_actions(not self.cfg.get("actions"))
+        if op == "decide" and arg:
+            from actions import DECISION_FILE
+            DECISION_FILE.parent.mkdir(parents=True, exist_ok=True)
+            DECISION_FILE.write_text(json.dumps({"approve": arg.lower() in ("yes", "run", "approve", "1", "true")}))
+            return "decided"
         if op == "toggle-toasts":
             v = not self.state.get("toasts", True)
             self.state.update(toasts=v)
@@ -376,6 +424,7 @@ class Companion:
         signal.signal(signal.SIGTERM, lambda *_: self._stop.set())
         signal.signal(signal.SIGINT, lambda *_: self._stop.set())
         threading.Thread(target=self.start_voice, daemon=True, name="voice-init").start()
+        self._install_approver()
         self.set_status("watching")
         log.info("companion running (tick=%ss)", self.cfg["tick_seconds"])
         try:

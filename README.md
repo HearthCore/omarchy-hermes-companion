@@ -42,6 +42,22 @@ Python packages added to the Hermes venv (`pillow`, `faster-whisper`, `sounddevi
 Screenshots are held in memory only and sent to the selected vision model; nothing is written to disk by the plugin
 besides its state/config files. No `sudo` or `pkexec` is required.
 
+## Actions (off by default)
+
+Toggle **Actions** in the popup (or `--ctl toggle-actions`). Voice/text requests can then get
+things *done*: the companion never runs commands itself — it hands the task to a Hermes
+subagent (`delegate_task`) that has `terminal` and file tools. Screen ticks can never trigger
+actions. Every child command passes through Hermes' own safety gate plus the companion policy
+(`daemon/actions.py`):
+
+| Tier | What | Behaviour |
+|---|---|---|
+| 0-3 | reads, builds, git, writes/deletes inside `$HOME` (not dotfiles), `/tmp` | runs |
+| 4 | Hermes dangerous patterns (recursive delete, force push, pipe-to-shell, service restarts, …), anything touching dotfiles or paths outside `$HOME`, `pkill`, credential files | **asks**: toast with Run / Skip + spoken "May I run …? say yes or no" (30 s, silence = no) |
+| 5 | Hermes hardline floors (`rm -rf ~`, `dd` to devices, `mkfs`, …), `sudo`/`pkexec`, system-scope `systemctl`, shutdown | refused |
+
+Audit log: `~/.local/state/hermes-companion/actions.jsonl` (every run, write, approval, refusal).
+
 ## Privacy
 Frames are skipped for password managers, private browsing, banking/OTP windows and the lock screen (see
 `daemon/perception.py`); you can pause the eyes anytime from the widget or `Super+Alt+E`.
@@ -61,7 +77,7 @@ Frames are skipped for password managers, private browsing, banking/OTP windows 
 ## Commands
 ```
 CTL="$HOME/.hermes/hermes-agent/venv/bin/python $HOME/.config/omarchy/plugins/hermes.companion/daemon/companion.py --ctl"
-$CTL status | toggle-eyes | listen | toggle-mute | toggle-toasts | hush | tick | models | set-vision <provider:model> | set-reasoning <provider:model|same> | set-{vision,reasoning}-effort <low|medium|high> | toggle-{vision,reasoning}-thinking | say <text> | ask <text> | toast <text> | quit
+$CTL status | toggle-eyes | listen | toggle-mute | toggle-toasts | toggle-actions | decide <yes|no> | hush | tick | models | set-vision <provider:model> | set-reasoning <provider:model|same> | set-{vision,reasoning}-effort <low|medium|high> | toggle-{vision,reasoning}-thinking | say <text> | ask <text> | toast <text> | quit
 journalctl --user -fu hermes-companion
 ```
 Keys: Super+Alt+H listen · Super+Alt+E eyes · Super+Alt+S hush. Bar icon: left = panel, right = listen, middle = hush.

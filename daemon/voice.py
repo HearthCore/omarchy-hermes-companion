@@ -63,6 +63,32 @@ class Voice:
         self._stop_speech.set()
 
     # ---------------------------------------------------------------- listen
+    def listen_for(self, timeout: float, parse):
+        """Capture one short utterance and return parse(transcript) (None on silence/timeout).
+        Used for yes/no approvals; does not go to the agent."""
+        if self._capturing.is_set():
+            return None
+        from hermes_cli import voice as hv
+
+        self._capturing.set()
+        got: list[str] = []
+        done = threading.Event()
+        try:
+            ok = hv.start_continuous(on_transcript=lambda t: (got.append(t), done.set()), on_status=lambda s: None,
+                                     on_silent_limit=done.set, silence_duration=1.0, auto_restart=False,
+                                     max_recording_seconds=min(8.0, timeout))
+            if not ok:
+                return None
+            done.wait(timeout=timeout)
+            try:
+                hv.stop_continuous()
+            except Exception:
+                pass
+            self._release_recorder(hv)
+        finally:
+            self._capturing.clear()
+        return parse(" ".join(got))
+
     def listen(self) -> bool:
         """Start one voice-request capture (returns False if one is already running)."""
         if self._capturing.is_set():

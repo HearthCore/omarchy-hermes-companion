@@ -20,6 +20,12 @@ Item {
   // otherwise the widget shows "Hermes not found" instead of a restart loop.
   property string hermesDir: home + "/.hermes/hermes-agent"
   Process { id: svc }
+  Process { id: decide }
+  readonly property string pythonBin: root.hermesDir + "/venv/bin/python"
+  function sendDecision(approve) {
+    decide.command = [root.pythonBin, root.pluginDir + "/daemon/companion.py", "--ctl", "decide " + (approve ? "yes" : "no")]
+    decide.running = true
+  }
   FileView {
     path: root.pluginDir + "/companion.json"
     printErrors: false
@@ -130,7 +136,8 @@ Item {
             required property string note
             required property double ts
             readonly property bool quiet: kind === "observation"
-            readonly property int lifetime: quiet ? root.toastLifetime * 0.6 : root.toastLifetime
+            readonly property bool approval: kind === "approval"
+            readonly property int lifetime: approval ? 31000 : (quiet ? root.toastLifetime * 0.6 : root.toastLifetime)
 
             Layout.preferredWidth: root.toastWidth
             Layout.alignment: Qt.AlignRight
@@ -166,7 +173,7 @@ Item {
             Rectangle {
               id: card
               width: root.toastWidth
-              height: body.implicitHeight + Style.space(28)
+              height: content.implicitHeight + Style.space(28)
               radius: Style.cornerRadius
               color: Util.alpha("#0b0d10", slot.quiet ? 0.72 : 0.86)
               border.width: 1
@@ -184,6 +191,7 @@ Item {
               HoverHandler { id: hover }
 
               Column {
+                id: content
                 anchors.fill: parent
                 anchors.margins: Style.space(14)
                 spacing: Style.space(6)
@@ -191,13 +199,13 @@ Item {
                 Row {
                   spacing: Style.space(8)
                   Text {
-                    text: slot.kind === "reply" ? "󰍬" : (slot.kind === "urgent" ? "󰀦" : (slot.kind === "held" ? "󰖁" : "󰛐"))
-                    color: slot.kind === "urgent" ? Color.urgent : (slot.quiet ? Util.alpha("#ffffff", 0.5) : Color.accent)
+                    text: slot.kind === "reply" ? "󰍬" : (slot.kind === "urgent" ? "󰀦" : (slot.kind === "held" ? "󰖁" : (slot.approval ? "󰆍" : (slot.kind === "action" ? "󰑮" : "󰛐"))))
+                    color: (slot.kind === "urgent" || slot.approval) ? Color.urgent : (slot.quiet ? Util.alpha("#ffffff", 0.5) : Color.accent)
                     font.family: Style.font.family
                     font.pixelSize: Style.font.body
                   }
                   Text {
-                    text: "Hermes" + (slot.kind === "urgent" ? "  ·  urgent" : (slot.kind === "held" ? "  ·  held: " + slot.note : (slot.quiet ? "  ·  observing" : "")))
+                    text: "Hermes" + (slot.kind === "urgent" ? "  ·  urgent" : (slot.approval ? "  ·  approve?  " + slot.note : (slot.kind === "action" ? "  ·  helper" : (slot.kind === "held" ? "  ·  held: " + slot.note : (slot.quiet ? "  ·  observing" : "")))))
                     color: Util.alpha("#ffffff", 0.75)
                     font.family: Style.font.family
                     font.pixelSize: Style.font.caption
@@ -221,6 +229,20 @@ Item {
                   font.pixelSize: slot.quiet ? Style.font.bodySmall : Style.font.body
                   font.italic: slot.quiet
                 }
+
+                Row {
+                  visible: slot.approval
+                  spacing: Style.space(8)
+                  Button { text: "󰐊 Run"; foreground: "#f4f4f4"; onClicked: { root.sendDecision(true); slot.dismiss() } }
+                  Button { text: "󰜺 Skip"; foreground: "#f4f4f4"; onClicked: { root.sendDecision(false); slot.dismiss() } }
+                  Text {
+                    anchors.verticalCenter: parent.verticalCenter
+                    text: "or say yes / no"
+                    color: Util.alpha("#ffffff", 0.45)
+                    font.family: Style.font.family
+                    font.pixelSize: Style.font.caption
+                  }
+                }
               }
 
               // lifetime progress (hidden while hovered)
@@ -239,8 +261,9 @@ Item {
 
               MouseArea {
                 anchors.fill: parent
+                z: -1
                 acceptedButtons: Qt.LeftButton | Qt.MiddleButton
-                onClicked: slot.dismiss()
+                onClicked: if (!slot.approval) slot.dismiss()
               }
             }
           }

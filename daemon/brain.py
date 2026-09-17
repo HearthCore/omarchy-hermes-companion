@@ -27,6 +27,7 @@ log = logging.getLogger("companion.agent")
 
 PROMPT_FILE = Path(__file__).with_name("prompt.md")
 READ_ONLY_TOOLS = {"web_search", "web_extract", "read_file", "search_files", "vision_analyze"}
+ACTION_TOOLS = READ_ONLY_TOOLS | {"delegate_task"}
 KEEP_IMAGES = 3  # most recent frames kept in context; older ones are replaced by a stub
 
 DESCRIBE_PROMPT = (
@@ -65,13 +66,16 @@ def _extract_json(text: str) -> Optional[dict]:
             return None
 
 
-def _make_agent(spec: ModelSpec, user_name: str, system_prompt: str, tools: bool, max_iterations: int):
+def _make_agent(spec: ModelSpec, user_name: str, system_prompt: str, tools: bool, max_iterations: int, actions: bool = False):
     from run_agent import AIAgent
 
+    # Children inherit the parent's toolsets, so the action agent must carry terminal+file
+    # itself; its own schema is then trimmed back to ACTION_TOOLS below.
+    toolsets = ["web", "file", "vision"] + (["terminal", "delegation"] if actions else [])
     agent = AIAgent(
         model=spec.model,
         provider=spec.provider,
-        enabled_toolsets=["web", "file", "vision"] if tools else [],
+        enabled_toolsets=toolsets if tools else [],
         quiet_mode=True,
         skip_context_files=True,
         skip_memory=True,
@@ -82,13 +86,14 @@ def _make_agent(spec: ModelSpec, user_name: str, system_prompt: str, tools: bool
         user_name=user_name,
         ephemeral_system_prompt=system_prompt,
     )
-    agent.tools = [t for t in (agent.tools or []) if tools and t["function"]["name"] in READ_ONLY_TOOLS]
+    allowed = ACTION_TOOLS if actions else READ_ONLY_TOOLS
+    agent.tools = [t for t in (agent.tools or []) if tools and t["function"]["name"] in allowed]
     agent.valid_tool_names = {t["function"]["name"] for t in agent.tools}
     return agent
 
 
 class CompanionAgent:
-    def __init__(self, vision: ModelSpec, reasoning: Optional[ModelSpec], user_name: str):
+    def __init__(self, vision: ModelSpec, reasoning: Optional[ModelSpec], user_name: str, actions: bool = False):
         self.user_name = user_name
         self.system_prompt = PROMPT_FILE.read_text().replace("{{USER}}", user_name)
         self.history: list[dict[str, Any]] = []
@@ -96,7 +101,11 @@ class CompanionAgent:
         self.vision = vision
         self.reasoning = reasoning or vision
         self.split = reasoning is not None and reasoning.key != vision.key
+        self.actions = actions
         self.agent = _make_agent(self.reasoning, user_name, self.system_prompt, tools=True, max_iterations=6)
+        # Request-only twin with delegate_task. Separate instance so screen ticks keep the
+        # read-only schema (and their prompt cache); it shares `history` by reference at call time.
+        self.actor = _make_agent(self.reasoning, user_name, self.system_prompt, tools=True, max_iterations=10, actions=True) if actions else None
         self.eyes = _make_agent(self.vision, user_name, DESCRIBE_PROMPT, tools=False, max_iterations=1) if self.split else None
         log.info(
             "agent ready: reasoning=%s (effort=%s thinking=%s) vision=%s%s tools=%s",
@@ -117,10 +126,19 @@ class CompanionAgent:
                 msg["content"] = [p for p in msg["content"] if p.get("type") == "text"] or [{"type": "text", "text": "[earlier screen frame omitted]"}]
                 msg["content"].append({"type": "text", "text": "[screen frame omitted to save context]"})
 
-    def _turn(self, content: Any) -> str:
+    def _turn(self, content: Any, agent=None) -> str:
+        agent = agent or self.agent
         with self._lock:
+            # No later turn consumes a detached delegate_task result here, so declare the
+            # session stateless: Hermes then runs children synchronously and the helper's
+            # result comes back inside this very turn (ContextVar → must be set per thread).
+            try:
+                from gateway.session_context import declare_stateless_channel
+                declare_stateless_channel()
+            except Exception:
+                pass
             self._prune_images()
-            result = self.agent.run_conversation(content, system_message=self.system_prompt, conversation_history=self.history)
+            result = agent.run_conversation(content, system_message=self.system_prompt, conversation_history=self.history)
             self.history = [m for m in (result.get("messages") or self.history) if m.get("role") != "system"]
             return (result.get("final_response") or "").strip()
 
@@ -160,4 +178,4 @@ class CompanionAgent:
             f"[{tag} from {self.user_name}]\n{transcript}\n\n"
             "Reply in plain spoken English (no JSON, no markdown, no lists), 1-4 sentences unless more is truly needed."
         )
-        return self._turn(msg)
+        return self._turn(msg, agent=self.actor if self.actions else None)

@@ -8,6 +8,7 @@
   "urgent_gap_seconds": 60,
   "max_per_hour": 8,
   "notify": true,
+  "actions": false,
   "vision": {
     "model": "",
     "effort": "low",
