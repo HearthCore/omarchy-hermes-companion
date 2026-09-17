@@ -12,7 +12,13 @@ frame in a stateless one-shot and the reasoning model runs the persistent conver
 - At least one model provider credential (`hermes auth add …` or a Claude Code login). Not required to install; pick a vision model in the widget afterwards.
 - Local speech-to-text (`faster-whisper`, installed by `install.sh`) for voice requests.
 
-Install / update: `~/.config/omarchy/plugins/hermes.companion/install.sh`
+## Install
+```bash
+omarchy plugin add https://github.com/PSthelyBlog/omarchy-hermes-companion.git --enable
+```
+Enabling the plugin opens the installer in a floating terminal the first time (checks Omarchy tooling and Hermes,
+installs Python deps into Hermes' venv, writes the systemd --user unit and Hyprland keybinds, starts the daemon).
+Re-run it anytime: `~/.config/omarchy/plugins/hermes.companion/install.sh`. Update with `omarchy plugin update hermes.companion`.
 
 ## Layout
 - `daemon/companion.py`  main loop · `--ctl <cmd>` talks to the running daemon
