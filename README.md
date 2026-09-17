@@ -1,5 +1,7 @@
 # Hermes Companion (Omarchy plugin)
 
+![Hermes Companion widget on the Omarchy desktop](preview.png)
+
 Always-on Hermes agent: watches the focused monitor, speaks up when it judges it useful,
 answers voice requests on demand (right-click the bar icon, the Listen button, or Super+Alt+H). Models: a **vision** model (must accept images; sees the screen) and an optional separate **reasoning** model
 (default = same as vision). Lists are built from every provider Hermes has credentials for, grouped by provider,
