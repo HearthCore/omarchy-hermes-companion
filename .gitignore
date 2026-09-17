@@ -1,0 +1,4 @@
+companion.json
+.installed
+__pycache__/
+*.pyc

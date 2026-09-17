@@ -1,0 +1,21 @@
+{
+  "user_name": "User",
+  "tick_seconds": 25,
+  "change_threshold": 12,
+  "max_width": 1280,
+  "idle_skip_seconds": 300,
+  "min_gap_seconds": 300,
+  "urgent_gap_seconds": 60,
+  "max_per_hour": 8,
+  "notify": true,
+  "vision": {
+    "model": "",
+    "effort": "low",
+    "thinking": true
+  },
+  "reasoning": {
+    "model": "",
+    "effort": "low",
+    "thinking": true
+  }
+}

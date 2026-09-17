@@ -1,0 +1,30 @@
+{
+  "schemaVersion": 1,
+  "id": "hermes.companion",
+  "name": "Hermes Companion",
+  "version": "0.2.0",
+  "author": "Philippe Sthely",
+  "license": "MIT",
+  "description": "Always-on Hermes agent that watches the screen, speaks up when useful, and answers voice requests (\"hey Hermes\").",
+  "kinds": [
+    "service",
+    "bar-widget"
+  ],
+  "keepLoaded": true,
+  "entryPoints": {
+    "service": "Service.qml",
+    "barWidget": "BarWidget.qml"
+  },
+  "barWidget": {
+    "displayName": "Hermes Companion",
+    "description": "Status of the Hermes companion: eyes, ears, last remark; quick toggles.",
+    "category": "AI",
+    "aliases": [
+      "companion",
+      "hermes"
+    ],
+    "allowMultiple": false,
+    "defaultSection": "right"
+  },
+  "homepage": "https://github.com/sthely/omarchy-hermes-companion"
+}
