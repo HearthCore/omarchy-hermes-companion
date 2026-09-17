@@ -35,11 +35,21 @@ Item {
     printErrors: false
     onLoaded: probe.reload()
     onLoadFailed: {
+      if (root.installLaunched) return
+      root.installLaunched = true
       console.log("hermes-companion: not installed yet, launching install.sh")
       svc.command = ["omarchy-launch-floating-terminal-with-presentation", root.pluginDir + "/install.sh"]
       svc.running = true
     }
   }
+  // Service.qml can be instantiated more than once during enable/rescan; a
+  // persisted flag keeps the installer terminal from opening twice.
+  PersistentProperties {
+    id: persisted
+    reloadableId: "hermes-companion-service"
+    property bool installLaunched: false
+  }
+  property alias installLaunched: persisted.installLaunched
   FileView {
     id: probe
     path: root.hermesDir + "/venv/bin/python"
