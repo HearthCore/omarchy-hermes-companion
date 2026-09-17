@@ -20,6 +20,30 @@ Enabling the plugin opens the installer in a floating terminal the first time (c
 installs Python deps into Hermes' venv, writes the systemd --user unit and Hyprland keybinds, starts the daemon).
 Re-run it anytime: `~/.config/omarchy/plugins/hermes.companion/install.sh`. Update with `omarchy plugin update hermes.companion`.
 
+## Uninstall
+```bash
+~/.config/omarchy/plugins/hermes.companion/uninstall.sh   # stops/disables the daemon, removes unit + keybinds
+omarchy plugin remove hermes.companion                    # removes the plugin checkout
+```
+Python packages added to the Hermes venv (`pillow`, `faster-whisper`, `sounddevice`) are left in place; remove with
+`uv pip uninstall` inside `~/.hermes/hermes-agent` if unwanted. Runtime state lives in `~/.local/state/hermes-companion/`.
+
+## External dependencies
+| Dependency | Why | Installed by |
+|---|---|---|
+| [Hermes Agent](https://github.com/NousResearch/hermes-agent) ≥ 0.21 (MIT) | model calls, STT/TTS pipeline, provider credentials | user / `omarchy install ai hermes` |
+| `pillow`, `faster-whisper`, `sounddevice` (PyPI) | screenshot scaling, local speech-to-text, mic capture | `install.sh` → `uv pip install` into the Hermes venv |
+| `grim`, `hyprctl`, `notify-send`, PipeWire (`pw-record`, `pactl`, `wpctl`) | screenshots, window info, notifications, audio | Omarchy base; `install.sh` offers `omarchy pkg add` if missing |
+| Edge TTS (via Hermes, network) | default voice output | Hermes |
+| Model provider APIs (Anthropic, Nous Portal, …) | screen ticks and answers are sent to the selected provider | user credentials via `hermes auth` |
+
+Screenshots are held in memory only and sent to the selected vision model; nothing is written to disk by the plugin
+besides its state/config files. No `sudo` or `pkexec` is required.
+
+## Privacy
+Frames are skipped for password managers, private browsing, banking/OTP windows and the lock screen (see
+`daemon/perception.py`); you can pause the eyes anytime from the widget or `Super+Alt+E`.
+
 ## Layout
 - `daemon/companion.py`  main loop · `--ctl <cmd>` talks to the running daemon
 - `daemon/perception.py` grim + hyprctl, dHash change detection, privacy filter (RAM only)
