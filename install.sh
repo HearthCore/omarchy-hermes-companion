@@ -87,8 +87,15 @@ if [[ -n "$providers" ]]; then green "✓ Model providers with credentials: $pro
 else yellow "! No model provider credentials yet. The companion will start idle; run 'hermes auth add <provider>' (or log in to Claude Code), then pick a vision model in the widget."; fi
 
 # ---------------------------------------------------------------- 5. python deps + STT
-echo "==> Python deps (into Hermes venv)"
-( cd "$HERMES_DIR" && source venv/bin/activate && uv pip install -q pillow faster-whisper sounddevice ) || yellow "! dep install failed"
+# Installed from requirements.lock: every direct and transitive package is pinned to an exact
+# version with sha256 hashes for each accepted artifact. --require-hashes makes uv refuse any
+# package that is unpinned, unhashed or whose artifact does not match, so a newly published
+# (or tampered) release cannot silently execute inside the persistent Hermes environment.
+# A failure here is a supply-chain signal: abort instead of continuing with unverified code.
+echo "==> Python deps (into Hermes venv, hash-verified from requirements.lock)"
+( cd "$HERMES_DIR" && source venv/bin/activate \
+  && uv pip install -q --require-hashes -r "$PLUGIN_DIR/requirements.lock" ) \
+  || die "dependency install failed — hash-verified install refused (see requirements.lock)"
 if (cd "$HERMES_DIR" && "$PY" -c 'import faster_whisper, sounddevice, PIL' 2>/dev/null); then green "✓ Local speech-to-text ready"
 else yellow "! faster-whisper/sounddevice/pillow not importable — voice requests disabled until fixed"; fi
 

@@ -34,13 +34,26 @@ Python packages added to the Hermes venv (`pillow`, `faster-whisper`, `sounddevi
 | Dependency | Why | Installed by |
 |---|---|---|
 | [Hermes Agent](https://github.com/NousResearch/hermes-agent) ≥ 0.21 (MIT) | model calls, STT/TTS pipeline, provider credentials | user / `omarchy install ai hermes` |
-| `pillow`, `faster-whisper`, `sounddevice` (PyPI) | screenshot scaling, local speech-to-text, mic capture | `install.sh` → `uv pip install` into the Hermes venv |
+| `pillow`, `faster-whisper`, `sounddevice` (PyPI) | screenshot scaling, local speech-to-text, mic capture | `install.sh` → hash-verified `uv pip install --require-hashes -r requirements.lock` into the Hermes venv |
 | `grim`, `hyprctl`, `notify-send`, PipeWire (`pw-record`, `pactl`, `wpctl`) | screenshots, window info, notifications, audio | Omarchy base; `install.sh` offers `omarchy pkg add` if missing |
 | Edge TTS (via Hermes, network) | default voice output | Hermes |
 | Model provider APIs (Anthropic, Nous Portal, …) | screen ticks and answers are sent to the selected provider | user credentials via `hermes auth` |
 
 Screenshots are held in memory only and sent to the selected vision model; nothing is written to disk by the plugin
 besides its state/config files. No `sudo` or `pkexec` is required.
+
+### Pinned Python dependencies
+`requirements.lock` pins every direct **and** transitive package to an exact version with sha256 hashes for each
+accepted artifact. `install.sh` installs it with `uv pip install --require-hashes`, so a newly published or tampered
+release cannot be pulled into the persistent Hermes environment; a hash mismatch aborts the install rather than
+falling back to an unverified one. The cutoff matches the Hermes venv's own `exclude-newer` quarantine, so the lock
+resolves inside it. To refresh the lock after a dependency bump:
+
+```bash
+printf 'pillow\nfaster-whisper\nsounddevice\n' |
+  uv pip compile --generate-hashes --universal --python-version 3.11 \
+    --exclude-newer "$(date -u -d '-15 days' +%Y-%m-%d)" -o requirements.lock -
+```
 
 ## Actions (off by default)
 
