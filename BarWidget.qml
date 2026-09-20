@@ -169,6 +169,7 @@ BarWidget {
     }
 
     Text {
+      textFormat: Text.PlainText
       text: picker.title
       color: Qt.darker(root.bar.foreground, 1.4)
       font.family: root.bar.fontFamily
@@ -210,6 +211,7 @@ BarWidget {
                : (rowHover.hovered ? Style.hoverFillFor(root.bar.foreground, Color.accent) : "transparent")
           HoverHandler { id: rowHover; enabled: !parent.isHeader }
           Text {
+            textFormat: Text.PlainText
             anchors.left: parent.left
             anchors.right: parent.right
             anchors.verticalCenter: parent.verticalCenter
@@ -238,6 +240,7 @@ BarWidget {
       width: parent.width
       spacing: Style.space(8)
       Text {
+        textFormat: Text.PlainText
         text: "Effort"
         anchors.verticalCenter: parent.verticalCenter
         color: Qt.darker(root.bar.foreground, 1.4)
@@ -264,6 +267,7 @@ BarWidget {
         onToggled: root.control("toggle-" + picker.role + "-thinking")
       }
       Text {
+        textFormat: Text.PlainText
         text: "Thinking"
         anchors.verticalCenter: parent.verticalCenter
         color: root.bar.foreground
@@ -294,6 +298,7 @@ BarWidget {
         width: parent.width
         spacing: Style.space(8)
         Text {
+          textFormat: Text.PlainText
           text: root.glyph
           color: root.bar.foreground
           font.family: root.bar.fontFamily
@@ -303,6 +308,7 @@ BarWidget {
         Column {
           width: parent.width - Style.space(40)
           Text {
+            textFormat: Text.PlainText
             text: "Hermes Companion"
             color: root.bar.foreground
             font.family: root.bar.fontFamily
@@ -310,6 +316,7 @@ BarWidget {
             font.bold: true
           }
           Text {
+            textFormat: Text.PlainText
             text: root.status + (root.st.ticks ? "  ·  " + root.st.ticks + " ticks, " + (root.st.frames_sent || 0) + " frames" : "")
             color: Qt.darker(root.bar.foreground, 1.4)
             font.family: root.bar.fontFamily
@@ -319,6 +326,7 @@ BarWidget {
       }
 
       Text {
+        textFormat: Text.PlainText
         width: parent.width
         wrapMode: Text.Wrap
         text: root.st.last_observation || "(no observation yet)"
@@ -346,6 +354,7 @@ BarWidget {
       }
 
       Text {
+        textFormat: Text.PlainText
         visible: root.hermesMissing
         width: parent.width
         wrapMode: Text.Wrap
@@ -355,6 +364,7 @@ BarWidget {
         font.pixelSize: Style.font.caption
       }
       Text {
+        textFormat: Text.PlainText
         visible: !!root.st.last_error && !root.hermesMissing
         width: parent.width
         wrapMode: Text.Wrap
@@ -422,6 +432,7 @@ BarWidget {
 
       // ---- Recent remarks: scrollable, fixed height ----
       Text {
+        textFormat: Text.PlainText
         text: "Recent"
         color: Qt.darker(root.bar.foreground, 1.4)
         font.family: root.bar.fontFamily
@@ -442,6 +453,7 @@ BarWidget {
           Repeater {
             model: root.remarks
             delegate: Text {
+              textFormat: Text.PlainText
               width: remarksCol.width
               wrapMode: Text.Wrap
               text: Qt.formatTime(new Date(modelData.ts * 1000), "HH:mm") + "  " + modelData.text
@@ -451,6 +463,7 @@ BarWidget {
             }
           }
           Text {
+            textFormat: Text.PlainText
             visible: root.remarks.length === 0
             text: "Nothing said yet."
             color: Qt.darker(root.bar.foreground, 1.6)

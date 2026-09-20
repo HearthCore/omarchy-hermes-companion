@@ -199,12 +199,15 @@ Item {
                 Row {
                   spacing: Style.space(8)
                   Text {
+                    textFormat: Text.PlainText
                     text: slot.kind === "reply" ? "󰍬" : (slot.kind === "urgent" ? "󰀦" : (slot.kind === "held" ? "󰖁" : (slot.approval ? "󰆍" : (slot.kind === "action" ? "󰑮" : "󰛐"))))
                     color: (slot.kind === "urgent" || slot.approval) ? Color.urgent : (slot.quiet ? Util.alpha("#ffffff", 0.5) : Color.accent)
                     font.family: Style.font.family
                     font.pixelSize: Style.font.body
                   }
                   Text {
+                    // model/screen-derived (slot.note): never interpret markup
+                    textFormat: Text.PlainText
                     text: "Hermes" + (slot.kind === "urgent" ? "  ·  urgent" : (slot.approval ? "  ·  approve?  " + slot.note : (slot.kind === "action" ? "  ·  helper" : (slot.kind === "held" ? "  ·  held: " + slot.note : (slot.quiet ? "  ·  observing" : "")))))
                     color: Util.alpha("#ffffff", 0.75)
                     font.family: Style.font.family
@@ -212,6 +215,7 @@ Item {
                     font.bold: true
                   }
                   Text {
+                    textFormat: Text.PlainText
                     text: Qt.formatTime(new Date(slot.ts * 1000), "HH:mm")
                     color: Util.alpha("#ffffff", 0.45)
                     font.family: Style.font.family
@@ -223,6 +227,8 @@ Item {
                   id: body
                   width: card.width - Style.space(28)
                   wrapMode: Text.Wrap
+                  // model/screen-derived (slot.text): never interpret markup
+                  textFormat: Text.PlainText
                   text: slot.text
                   color: slot.quiet ? Util.alpha("#f4f4f4", 0.7) : "#f4f4f4"
                   font.family: Style.font.family
@@ -237,6 +243,7 @@ Item {
                   Button { text: "󰜺 Skip"; foreground: "#f4f4f4"; onClicked: { root.sendDecision(false); slot.dismiss() } }
                   Text {
                     anchors.verticalCenter: parent.verticalCenter
+                    textFormat: Text.PlainText
                     text: "or say yes / no"
                     color: Util.alpha("#ffffff", 0.45)
                     font.family: Style.font.family

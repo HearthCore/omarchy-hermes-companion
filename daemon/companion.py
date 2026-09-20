@@ -82,9 +82,21 @@ def _spec(d: dict) -> ModelSpec:
     return ModelSpec(prov, model, d.get("effort", "low"), bool(d.get("thinking", True)))
 
 
+def _no_markup(s: str) -> str:
+    """Escape the HTML subset that markup-capable notification servers parse.
+
+    notify-send bodies are rendered by the server (dunst, mako, GNOME Shell), and servers
+    advertising the freedesktop ``body-markup`` capability interpret <b>, <i>, <u>, <a href>
+    and <img src> in the text. Our title/body carry model output and screen-derived text, so
+    escape the three markup-significant characters and let the server show them literally.
+    """
+    return str(s).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+
+
 def notify(title: str, body: str, urgency: str = "normal"):
     try:
-        subprocess.Popen(["notify-send", "-a", "Hermes", "-u", "critical" if urgency == "urgent" else "normal", title, body])
+        subprocess.Popen(["notify-send", "-a", "Hermes", "-u", "critical" if urgency == "urgent" else "normal",
+                          _no_markup(title), _no_markup(body)])
     except Exception:
         pass
 
