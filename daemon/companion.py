@@ -48,6 +48,10 @@ DEFAULTS = {
     "max_per_hour": 8,
     "notify": True,
     "actions": False,   # let voice/text requests delegate shell/file work to a Hermes subagent
+    # Free-text description of who the user is / how they work, injected into the system
+    # prompt in place of the tool's default "solo freelance developer" persona line. Empty
+    # (default) keeps that original line; anything else replaces it entirely.
+    "user_context": "",
 }
 
 
@@ -121,6 +125,7 @@ class Companion:
         self.agent = self._build_agent()
         self._publish_models()
         self.state.update(actions=bool(cfg.get("actions")))
+        self.state.update(user_context=cfg.get("user_context") or "")
         self.voice = None
         self.approver = None
         self._stop = threading.Event()
@@ -171,6 +176,16 @@ class Companion:
         self.state.update(actions=bool(enabled))
         audit({"kind": "actions", "enabled": bool(enabled)})
         return f"actions={'on' if enabled else 'off'}"
+
+    def set_user_context(self, user_context: str) -> str:
+        user_context = user_context.strip()
+        self.cfg["user_context"] = user_context
+        self._persist_cfg({"user_context": user_context})
+        new = self._build_agent()
+        new.history = list(self.agent.history)
+        self.agent = new
+        self.state.update(user_context=user_context)
+        return f"user_context={user_context or '(default)'}"
 
     # ------------------------------------------------------------ voice
     def start_voice(self):
@@ -306,7 +321,8 @@ class Companion:
     def _build_agent(self) -> CompanionAgent:
         v = _spec(self.cfg["vision"])
         r = _spec(self.cfg["reasoning"]) if self.cfg["reasoning"]["model"] else None
-        return CompanionAgent(v, r, self.cfg["user_name"], actions=bool(self.cfg.get("actions")))
+        return CompanionAgent(v, r, self.cfg["user_name"], actions=bool(self.cfg.get("actions")),
+                               user_context=str(self.cfg.get("user_context") or ""))
 
     def set_role(self, role: str, model: str | None = None, effort: str | None = None, thinking: bool | None = None) -> str:
         if role not in ("vision", "reasoning"):
@@ -398,6 +414,8 @@ class Companion:
             return f"muted={'on' if v else 'off'}"
         if op == "toggle-actions":
             return self.set_actions(not self.cfg.get("actions"))
+        if op == "set-user-context":
+            return self.set_user_context(arg)
         if op == "decide" and arg:
             from actions import DECISION_FILE
             DECISION_FILE.parent.mkdir(parents=True, exist_ok=True)

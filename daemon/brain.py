@@ -38,6 +38,18 @@ DESCRIBE_PROMPT = (
     "would point out. Quote short key strings verbatim (error text, file:line). No preamble, no markdown."
 )
 
+# Default persona line, used when companion.json sets no "user_context" — keeps the
+# out-of-the-box behaviour identical to before this was made configurable.
+_DEFAULT_USER_CONTEXT = "{{USER}} is a solo freelance developer working in an AI-driven, vibe-coding style."
+
+
+def _user_context(user_context: str) -> str:
+    """Free-text description of the user/environment injected near the top of the system
+    prompt, so anyone can describe who they are and how they work without editing prompt.md.
+    Empty/unset falls back to the tool's original default persona line."""
+    user_context = (user_context or "").strip()
+    return user_context or _DEFAULT_USER_CONTEXT
+
 
 @dataclass
 class ModelSpec:
@@ -93,9 +105,15 @@ def _make_agent(spec: ModelSpec, user_name: str, system_prompt: str, tools: bool
 
 
 class CompanionAgent:
-    def __init__(self, vision: ModelSpec, reasoning: Optional[ModelSpec], user_name: str, actions: bool = False):
+    def __init__(self, vision: ModelSpec, reasoning: Optional[ModelSpec], user_name: str,
+                 actions: bool = False, user_context: str = ""):
         self.user_name = user_name
-        self.system_prompt = PROMPT_FILE.read_text().replace("{{USER}}", user_name)
+        # {{USER}} inside the resolved user-context text (default or custom) must expand to
+        # the real name too, so replace {{USER}} first, then splice in {{USER_CONTEXT}}.
+        resolved_context = _user_context(user_context).replace("{{USER}}", user_name)
+        self.system_prompt = (PROMPT_FILE.read_text()
+                               .replace("{{USER}}", user_name)
+                               .replace("{{USER_CONTEXT}}", resolved_context))
         self.history: list[dict[str, Any]] = []
         self._lock = threading.Lock()
         self.vision = vision
