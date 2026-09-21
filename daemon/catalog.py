@@ -48,6 +48,68 @@ def _bare(model: str) -> str:
     return m
 
 
+def _named_custom_providers() -> list[dict]:
+    """User-configured named custom endpoints (config.yaml ``providers:`` / legacy
+    ``custom_providers:``) as their routable runtime identities ``custom:<slug>``.
+
+    The bare ``custom`` id is deliberately not offered: the runtime resolver refuses it
+    (it owns no endpoint) and the request falls through to an unrelated provider.
+    """
+    try:
+        from hermes_cli.config import load_config
+        from hermes_cli.providers import custom_provider_slug
+
+        cfg = load_config()
+    except Exception:
+        return []
+    entries = []
+    providers = cfg.get("providers")
+    for key, entry in (providers.items() if isinstance(providers, dict) else []):
+        if isinstance(entry, dict):
+            entries.append((str(entry.get("name") or key), str(key), entry))
+    legacy = cfg.get("custom_providers")
+    for entry in (legacy if isinstance(legacy, list) else []):
+        if isinstance(entry, dict):
+            entries.append((str(entry.get("name") or ""), str(entry.get("provider_key") or ""), entry))
+    out, seen = [], set()
+    for name, key, entry in entries:
+        base_url = str(entry.get("base_url") or entry.get("url") or entry.get("api") or "").strip()
+        slug = custom_provider_slug(name, key) if (name or key) else ""
+        pid = slug if slug.startswith("custom:") else (f"custom:{slug}" if slug else "")
+        if not base_url or not pid or pid in seen:
+            continue
+        seen.add(pid)
+        api_key = str(entry.get("api_key") or "").strip()
+        key_env = str(entry.get("key_env") or "").strip()
+        m = re.match(r"^\$\{([A-Za-z0-9_]+)\}$", api_key)  # api_key is usually a ${ENV_NAME} template
+        if m:
+            key_env, api_key = m.group(1), ""
+        elif key_env:
+            api_key = ""
+        out.append({"id": pid, "slug": pid.partition(":")[2], "label": name or key,
+                    "base_url": base_url, "key_env": key_env, "api_key": api_key})
+    return out
+
+
+def _endpoint_model_ids(base_url: str, key_env: str, api_key: str = "") -> list[str]:
+    """OpenAI-wire ``GET <base_url>/models`` for one named custom endpoint."""
+    req = urllib.request.Request(base_url.rstrip("/") + "/models")
+    key = api_key
+    if not key and key_env:
+        try:
+            from agent.credential_pool import get_env_prefer_dotenv
+
+            key = get_env_prefer_dotenv(key_env).strip()
+        except Exception:
+            key = os.environ.get(key_env, "").strip()
+    if key:
+        req.add_header("Authorization", f"Bearer {key}")
+    with urllib.request.urlopen(req, timeout=15) as r:
+        d = json.load(r)
+    data = d.get("data", d) if isinstance(d, dict) else d
+    return sorted({str(m["id"]) for m in data if isinstance(m, dict) and m.get("id")})
+
+
 class Catalog:
     def __init__(self):
         self.providers: list[dict] = []   # [{id, label, models:[{id, vision, note}]}]
@@ -77,6 +139,8 @@ class Catalog:
             if not (p.get("authenticated") or self._extra_auth(p["id"])):
                 continue
             pid = p["id"]
+            if pid == "custom":
+                continue  # bare "custom" owns no endpoint; named endpoints are appended below
             try:
                 ids = provider_model_ids(pid) or []
             except Exception:
@@ -105,8 +169,22 @@ class Catalog:
             models.sort(key=lambda m: (m["vision"] is not True,))
             provs.append({"id": pid, "label": p.get("label", pid), "models": models})
 
+        # named custom endpoints (skipping ones that are real registry providers), then
         # main provider first, then alphabetical
-        provs.sort(key=lambda p: (p["id"] != main_provider, p["id"]))
+        canonical_ids = {p["id"] for p in provs}
+        for np in _named_custom_providers():
+            if np["slug"] in canonical_ids or np["id"] in canonical_ids:
+                continue
+            try:
+                models = [{"id": mid, "vision": self._vision_for(np["id"], mid, None), "note": ""}
+                          for mid in _endpoint_model_ids(np["base_url"], np["key_env"], np["api_key"])]
+                models.sort(key=lambda m: (m["vision"] is not True,))
+                provs.append({"id": np["id"], "label": np["label"], "models": models})
+            except Exception:
+                log.warning("model list failed for %s", np["id"], exc_info=True)
+                provs.append({"id": np["id"], "label": np["label"], "models": [], "error": "unavailable"})
+        main_ids = {main_provider, f"custom:{main_provider}"}
+        provs.sort(key=lambda p: (p["id"] not in main_ids, p["id"]))
         self.providers = provs
         return self
 

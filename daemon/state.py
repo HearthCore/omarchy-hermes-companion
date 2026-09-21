@@ -55,10 +55,13 @@ class State:
             self._write()
 
     def toast(self, text: str, kind: str, note: str = ""):
-        """Publish one toast for the shell overlay (atomic write; shell watches the file)."""
-        tmp = TOAST_FILE.with_suffix(".tmp")
-        tmp.write_text(json.dumps({"ts": time.time(), "text": text, "kind": kind, "note": note}))
-        os.replace(tmp, TOAST_FILE)
+        """Publish one toast via atomic file write (debounced in QML to 1/sec max)."""
+        try:
+            tmp = TOAST_FILE.with_suffix(".tmp")
+            tmp.write_text(json.dumps({"ts": time.time(), "text": text, "kind": kind, "note": note}))
+            os.replace(tmp, TOAST_FILE)
+        except Exception as e:
+            log.warning(f"Failed to write toast file: {e}")
 
     def get(self, k, default=None):
         with self._lock:

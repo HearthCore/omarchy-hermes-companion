@@ -174,8 +174,4 @@ class CompanionAgent:
     def ask(self, transcript: str, source: str = "voice") -> str:
         """Voice or typed request from the user. Returns plain spoken reply."""
         tag = "VOICE REQUEST" if source == "voice" else "TEXT REQUEST"
-        msg = (
-            f"[{tag} from {self.user_name}]\n{transcript}\n\n"
-            "Reply in plain spoken English (no JSON, no markdown, no lists), 1-4 sentences unless more is truly needed."
-        )
-        return self._turn(msg, agent=self.actor if self.actions else None)
+        return self._turn(f"[{tag} from {self.user_name}]\n{transcript}", agent=self.actor if self.actions else None)

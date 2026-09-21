@@ -78,8 +78,20 @@ def load_config() -> dict:
 
 
 def _spec(d: dict) -> ModelSpec:
-    prov, _, model = d["model"].partition(":")
-    return ModelSpec(prov, model, d.get("effort", "low"), bool(d.get("thinking", True)))
+    raw = str(d.get("model") or "").strip()
+    effort, thinking = d.get("effort", "low"), bool(d.get("thinking", True))
+    if not raw:
+        return ModelSpec("", "", effort, thinking)
+    try:  # named custom endpoints: "custom:litellm:mimo-v2.5" -> ("custom:litellm", "mimo-v2.5")
+        from hermes_cli.models import parse_model_input
+
+        prov, model = parse_model_input(raw, "")
+        if prov and model:
+            return ModelSpec(prov, model, effort, thinking)
+    except Exception:
+        pass
+    prov, _, model = raw.partition(":")
+    return ModelSpec(prov, model, effort, thinking)
 
 
 def _no_markup(s: str) -> str:
