@@ -10,6 +10,7 @@
   "notify": true,
   "actions": false,
   "language": "auto",
+  "user_context": "",
   "vision": {
     "model": "",
     "effort": "low",

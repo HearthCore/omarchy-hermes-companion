@@ -52,6 +52,10 @@ DEFAULTS = {
     # addressed it in; a fixed value (e.g. "German") pins every reply to that language
     # regardless of what the user typed/spoke in.
     "language": "German",
+    # Free-text description of who the user is / how they work, injected into the system
+    # prompt in place of the tool's default "solo freelance developer" persona line. Empty
+    # (default) keeps that original line; anything else replaces it entirely.
+    "user_context": "{{USER}} is a solo freelancer — developer and infrastructure architect — and he works AI-driven, in a vibe-coding flow: he ships fast, thinks in systems, and knows exactly what he's doing.",
 }
 
 
@@ -138,6 +142,7 @@ class Companion:
         self._publish_models()
         self.state.update(actions=bool(cfg.get("actions")))
         self.state.update(language=cfg.get("language") or "auto")
+        self.state.update(user_context=cfg.get("user_context") or "")
         self.voice = None
         self.approver = None
         self._stop = threading.Event()
@@ -198,6 +203,16 @@ class Companion:
         self.agent = new
         self.state.update(language=language)
         return f"language={language}"
+
+    def set_user_context(self, user_context: str) -> str:
+        user_context = user_context.strip()
+        self.cfg["user_context"] = user_context
+        self._persist_cfg({"user_context": user_context})
+        new = self._build_agent()
+        new.history = list(self.agent.history)
+        self.agent = new
+        self.state.update(user_context=user_context)
+        return f"user_context={user_context or '(default)'}"
 
     # ------------------------------------------------------------ voice
     def start_voice(self):
@@ -334,7 +349,8 @@ class Companion:
         v = _spec(self.cfg["vision"])
         r = _spec(self.cfg["reasoning"]) if self.cfg["reasoning"]["model"] else None
         return CompanionAgent(v, r, self.cfg["user_name"], actions=bool(self.cfg.get("actions")),
-                               language=str(self.cfg.get("language") or "auto"))
+                               language=str(self.cfg.get("language") or "auto"),
+                               user_context=str(self.cfg.get("user_context") or ""))
 
     def set_role(self, role: str, model: str | None = None, effort: str | None = None, thinking: bool | None = None) -> str:
         if role not in ("vision", "reasoning"):
@@ -428,6 +444,8 @@ class Companion:
             return self.set_actions(not self.cfg.get("actions"))
         if op == "set-language" and arg:
             return self.set_language(arg)
+        if op == "set-user-context":
+            return self.set_user_context(arg)
         if op == "decide" and arg:
             from actions import DECISION_FILE
             DECISION_FILE.parent.mkdir(parents=True, exist_ok=True)
