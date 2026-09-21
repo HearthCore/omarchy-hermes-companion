@@ -48,6 +48,10 @@ DEFAULTS = {
     "max_per_hour": 8,
     "notify": True,
     "actions": False,   # let voice/text requests delegate shell/file work to a Hermes subagent
+    # Reply language: "auto" asks the model to answer in whichever language {{USER}}
+    # addressed it in; a fixed value (e.g. "German") pins every reply to that language
+    # regardless of what the user typed/spoke in.
+    "language": "German",
 }
 
 
@@ -133,6 +137,7 @@ class Companion:
         self.agent = self._build_agent()
         self._publish_models()
         self.state.update(actions=bool(cfg.get("actions")))
+        self.state.update(language=cfg.get("language") or "auto")
         self.voice = None
         self.approver = None
         self._stop = threading.Event()
@@ -183,6 +188,16 @@ class Companion:
         self.state.update(actions=bool(enabled))
         audit({"kind": "actions", "enabled": bool(enabled)})
         return f"actions={'on' if enabled else 'off'}"
+
+    def set_language(self, language: str) -> str:
+        language = language.strip() or "auto"
+        self.cfg["language"] = language
+        self._persist_cfg({"language": language})
+        new = self._build_agent()
+        new.history = list(self.agent.history)
+        self.agent = new
+        self.state.update(language=language)
+        return f"language={language}"
 
     # ------------------------------------------------------------ voice
     def start_voice(self):
@@ -318,7 +333,8 @@ class Companion:
     def _build_agent(self) -> CompanionAgent:
         v = _spec(self.cfg["vision"])
         r = _spec(self.cfg["reasoning"]) if self.cfg["reasoning"]["model"] else None
-        return CompanionAgent(v, r, self.cfg["user_name"], actions=bool(self.cfg.get("actions")))
+        return CompanionAgent(v, r, self.cfg["user_name"], actions=bool(self.cfg.get("actions")),
+                               language=str(self.cfg.get("language") or "auto"))
 
     def set_role(self, role: str, model: str | None = None, effort: str | None = None, thinking: bool | None = None) -> str:
         if role not in ("vision", "reasoning"):
@@ -410,6 +426,8 @@ class Companion:
             return f"muted={'on' if v else 'off'}"
         if op == "toggle-actions":
             return self.set_actions(not self.cfg.get("actions"))
+        if op == "set-language" and arg:
+            return self.set_language(arg)
         if op == "decide" and arg:
             from actions import DECISION_FILE
             DECISION_FILE.parent.mkdir(parents=True, exist_ok=True)

@@ -39,6 +39,21 @@ DESCRIBE_PROMPT = (
 )
 
 
+def _language_rule(language: str) -> str:
+    """Reply-language instruction, shared by the system prompt and every per-turn nudge.
+
+    "auto" (default) keeps the companion's spirit language-agnostic: it follows whichever
+    language {{USER}} actually used, so nothing has to be configured for the common case
+    and nothing here hardcodes a single language. A fixed value pins every reply instead —
+    useful when the user always addresses it in a language other than English but the vision
+    model's screen narration or transcription occasionally slips into English.
+    """
+    language = (language or "auto").strip()
+    if language.lower() in ("", "auto", "user", "match"):
+        return "Reply in the language {{USER}} addressed you in — match their language, don't translate it."
+    return "Reply in " + language + ", regardless of the language {{USER}} addressed you in."
+
+
 @dataclass
 class ModelSpec:
     provider: str
@@ -93,9 +108,13 @@ def _make_agent(spec: ModelSpec, user_name: str, system_prompt: str, tools: bool
 
 
 class CompanionAgent:
-    def __init__(self, vision: ModelSpec, reasoning: Optional[ModelSpec], user_name: str, actions: bool = False):
+    def __init__(self, vision: ModelSpec, reasoning: Optional[ModelSpec], user_name: str,
+                 actions: bool = False, language: str = "auto"):
         self.user_name = user_name
-        self.system_prompt = PROMPT_FILE.read_text().replace("{{USER}}", user_name)
+        self.language_rule = _language_rule(language).replace("{{USER}}", user_name)
+        self.system_prompt = (PROMPT_FILE.read_text()
+                               .replace("{{USER}}", user_name)
+                               .replace("{{LANGUAGE_RULE}}", self.language_rule))
         self.history: list[dict[str, Any]] = []
         self._lock = threading.Lock()
         self.vision = vision
@@ -174,4 +193,9 @@ class CompanionAgent:
     def ask(self, transcript: str, source: str = "voice") -> str:
         """Voice or typed request from the user. Returns plain spoken reply."""
         tag = "VOICE REQUEST" if source == "voice" else "TEXT REQUEST"
-        return self._turn(f"[{tag} from {self.user_name}]\n{transcript}", agent=self.actor if self.actions else None)
+        msg = (
+            f"[{tag} from {self.user_name}]\n{transcript}\n\n"
+            f"Reply in plain spoken prose (no JSON, no markdown, no lists), 1-4 sentences unless "
+            f"more is truly needed. {self.language_rule}"
+        )
+        return self._turn(msg, agent=self.actor if self.actions else None)
