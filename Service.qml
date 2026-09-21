@@ -69,13 +69,31 @@ Item {
   property bool toastsEnabled: true
   readonly property int toastLifetime: 12000     // ms visible (pauses on hover)
   readonly property int toastWidth: Style.space(420)
+  // Where the toast stack spawns and how far from that corner — set via
+  // companion.json's toast_position or `--ctl set-toast-position <anchor>,<mx>,<my>`.
+  property string toastAnchor: "top-right"
+  property int toastMarginX: 0
+  property int toastMarginY: 0
+  readonly property bool toastAnchorTop: toastAnchor === "top-right" || toastAnchor === "top-left"
+  readonly property bool toastAnchorRight: toastAnchor === "top-right" || toastAnchor === "bottom-right"
 
   FileView {
     path: root.stateDir + "/state.json"
     watchChanges: true
     printErrors: false
     onFileChanged: reload()
-    onLoaded: { try { var s = JSON.parse(String(text() || "")); root.toastsEnabled = s.toasts !== false } catch (e) {} }
+    onLoaded: {
+      try {
+        var s = JSON.parse(String(text() || ""))
+        root.toastsEnabled = s.toasts !== false
+        var tp = s.toast_position
+        if (tp) {
+          if (typeof tp.anchor === "string") root.toastAnchor = tp.anchor
+          if (typeof tp.margin_x === "number") root.toastMarginX = tp.margin_x
+          if (typeof tp.margin_y === "number") root.toastMarginY = tp.margin_y
+        }
+      } catch (e) {}
+    }
   }
 
   property double lastToastTs: 0
@@ -127,12 +145,15 @@ Item {
   }
 
   // Bar clearance: same calculation as the native notifications plugin
-  // (Service.qml), so our toasts clear the bar the same way theirs do.
+  // (Service.qml), so our toasts clear the bar the same way theirs do —
+  // only applied when the toast anchor sits on the bar's own edge.
   readonly property string barPosition: shell && shell.barConfig ? String(shell.barConfig.position || "top") : "top"
   readonly property bool barVertical: barPosition === "left" || barPosition === "right"
   readonly property int defaultBarSize: barVertical ? Style.bar.sizeVertical : Style.bar.sizeHorizontal
   readonly property int liveBarSize: shell && shell.bar && !shell.bar.barHidden ? Math.max(0, shell.bar.barSize) : defaultBarSize
   readonly property int barClearance: liveBarSize + Style.gapsOut
+  readonly property bool toastNearBar: (barPosition === "top" && toastAnchorTop) || (barPosition === "bottom" && !toastAnchorTop)
+      || (barPosition === "left" && !toastAnchorRight) || (barPosition === "right" && toastAnchorRight)
 
   PanelWindow {
     id: win
@@ -148,10 +169,14 @@ Item {
 
     ColumnLayout {
       id: col
-      anchors.right: parent.right
-      anchors.top: parent.top
-      anchors.rightMargin: Style.gapsOut + Style.space(24)
-      anchors.topMargin: root.barPosition === "top" ? root.barClearance + Style.space(8) : Style.gapsOut + Style.space(8)
+      anchors.right: root.toastAnchorRight ? parent.right : undefined
+      anchors.left: root.toastAnchorRight ? undefined : parent.left
+      anchors.top: root.toastAnchorTop ? parent.top : undefined
+      anchors.bottom: root.toastAnchorTop ? undefined : parent.bottom
+      anchors.rightMargin: Style.gapsOut + Style.space(24) + root.toastMarginX
+      anchors.leftMargin: Style.gapsOut + Style.space(24) + root.toastMarginX
+      anchors.topMargin: (root.toastNearBar && !root.barVertical ? root.barClearance : Style.gapsOut) + Style.space(8) + root.toastMarginY
+      anchors.bottomMargin: (root.toastNearBar && !root.barVertical ? root.barClearance : Style.gapsOut) + Style.space(8) + root.toastMarginY
       spacing: Style.space(8)
 
       // Newest toast is inserted at index 0 (top of the stack); each toast
@@ -171,7 +196,7 @@ Item {
           readonly property int lifetime: approval ? 31000 : (quiet ? root.toastLifetime * 0.6 : root.toastLifetime)
 
           Layout.preferredWidth: root.toastWidth
-          Layout.alignment: Qt.AlignRight
+          Layout.alignment: root.toastAnchorRight ? Qt.AlignRight : Qt.AlignLeft
           implicitHeight: card.height
 
           property real remaining: 1.0
@@ -196,7 +221,7 @@ Item {
             id: leaveAnim
             ParallelAnimation {
               NumberAnimation { target: card; property: "opacity"; to: 0; duration: 350; easing.type: Easing.InQuad }
-              NumberAnimation { target: card; property: "x"; to: Style.space(40); duration: 350; easing.type: Easing.InQuad }
+              NumberAnimation { target: card; property: "x"; to: root.toastAnchorRight ? Style.space(40) : -Style.space(40); duration: 350; easing.type: Easing.InQuad }
             }
             ScriptAction { script: { for (var i = 0; i < toastModel.count; i++) if (toastModel.get(i).ts === slot.ts) { toastModel.remove(i); break } } }
           }
@@ -210,7 +235,7 @@ Item {
             border.width: 1
             border.color: Util.alpha(Color.popups.border, 0.7)
             opacity: 0
-            x: Style.space(40)
+            x: root.toastAnchorRight ? Style.space(40) : -Style.space(40)
 
             Component.onCompleted: enterAnim.start()
             ParallelAnimation {

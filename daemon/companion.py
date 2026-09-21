@@ -48,7 +48,13 @@ DEFAULTS = {
     "max_per_hour": 8,
     "notify": True,
     "actions": False,   # let voice/text requests delegate shell/file work to a Hermes subagent
+    # Where the toast stack spawns and how far it sits from that corner. anchor is one of
+    # top-right/top-left/bottom-right/bottom-left; margin_x/margin_y are extra pixels added
+    # on top of the bar clearance + base gap the shell already reserves.
+    "toast_position": {"anchor": "top-right", "margin_x": 0, "margin_y": 0},
 }
+
+_TOAST_ANCHORS = ("top-right", "top-left", "bottom-right", "bottom-left")
 
 
 def load_config() -> dict:
@@ -74,6 +80,10 @@ def load_config() -> dict:
             log.exception("config migration")
     for role in ("vision", "reasoning"):
         d = dict(DEFAULTS[role]); d.update(cfg.get(role) or {}); cfg[role] = d
+    tp = dict(DEFAULTS["toast_position"]); tp.update(cfg.get("toast_position") or {})
+    if tp.get("anchor") not in _TOAST_ANCHORS:
+        tp["anchor"] = DEFAULTS["toast_position"]["anchor"]
+    cfg["toast_position"] = tp
     return cfg
 
 
@@ -121,6 +131,7 @@ class Companion:
         self.agent = self._build_agent()
         self._publish_models()
         self.state.update(actions=bool(cfg.get("actions")))
+        self.state.update(toast_position=cfg["toast_position"])
         self.voice = None
         self.approver = None
         self._stop = threading.Event()
@@ -407,6 +418,22 @@ class Companion:
             v = not self.state.get("toasts", True)
             self.state.update(toasts=v)
             return f"toasts={'on' if v else 'off'}"
+        if op == "set-toast-position" and arg:
+            # "anchor[,margin_x[,margin_y]]" e.g. "top-left,20,10"
+            parts = [p.strip() for p in arg.split(",")]
+            anchor = parts[0] if parts else ""
+            if anchor not in _TOAST_ANCHORS:
+                return f"unknown anchor: {anchor!r} (expected one of {', '.join(_TOAST_ANCHORS)})"
+            try:
+                margin_x = int(parts[1]) if len(parts) > 1 and parts[1] else self.cfg["toast_position"]["margin_x"]
+                margin_y = int(parts[2]) if len(parts) > 2 and parts[2] else self.cfg["toast_position"]["margin_y"]
+            except ValueError:
+                return "margin_x/margin_y must be integers"
+            tp = {"anchor": anchor, "margin_x": margin_x, "margin_y": margin_y}
+            self.cfg["toast_position"] = tp
+            self._persist_cfg({"toast_position": tp})
+            self.state.update(toast_position=tp)
+            return f"toast_position={anchor} margin=({margin_x},{margin_y})"
         if op == "toast" and arg:
             self.state.toast(arg, "remark")
             return "toasted"
