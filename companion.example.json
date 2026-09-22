@@ -11,6 +11,7 @@
   "actions": false,
   "language": "auto",
   "user_context": "",
+  "eyes": true,
   "vision": {
     "model": "",
     "effort": "low",

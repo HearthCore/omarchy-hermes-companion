@@ -22,11 +22,11 @@ SOCK = RUNTIME_DIR / "hermes-companion.sock"
 class State:
     """Process-wide state; every mutation is atomically written to STATE_FILE."""
 
-    def __init__(self):
+    def __init__(self, eyes: bool = True):
         self._lock = threading.Lock()
         self.data = {
             "status": "starting",  # starting|watching|listening|thinking|speaking|paused|error
-            "eyes": True,
+            "eyes": bool(eyes),
             "muted": False,   # mute proactive speech (still answers voice requests)
             "toasts": True,   # on-screen toasts with agent output
             "last_observation": "",

@@ -56,6 +56,10 @@ DEFAULTS = {
     # prompt in place of the tool's default "solo freelance developer" persona line. Empty
     # (default) keeps that original line; anything else replaces it entirely.
     "user_context": "{{USER}} is a solo freelancer — developer and infrastructure architect — and he works AI-driven, in a vibe-coding flow: he ships fast, thinks in systems, and knows exactly what he's doing.",
+    # Start with the screen-watching "eyes" on (True, matches the tool's original
+    # always-on behaviour) or off (False), e.g. for on-demand/ask-only use where nothing
+    # persists across restarts anyway and proactive screen ticks aren't wanted by default.
+    "eyes": False,
 }
 
 
@@ -124,7 +128,7 @@ def notify(title: str, body: str, urgency: str = "normal"):
 class Companion:
     def __init__(self, cfg: dict):
         self.cfg = cfg
-        self.state = State()
+        self.state = State(eyes=bool(cfg.get("eyes", True)))
         self.perceiver = Perceiver(cfg["change_threshold"], cfg["max_width"])
         self.policy = SpeechPolicy(PolicyConfig(cfg["min_gap_seconds"], cfg["urgent_gap_seconds"], cfg["max_per_hour"]))
         self.catalog = Catalog()
