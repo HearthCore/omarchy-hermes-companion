@@ -9,6 +9,7 @@
   "max_per_hour": 8,
   "notify": true,
   "actions": false,
+  "eyes": true,
   "vision": {
     "model": "",
     "effort": "low",

@@ -84,7 +84,7 @@ Frames are skipped for password managers, private browsing, banking/OTP windows 
 - `daemon/policy.py`     cooldowns / fullscreen / call / idle gating for unprompted speech
 - `daemon/state.py`      `~/.local/state/hermes-companion/state.json` + `$XDG_RUNTIME_DIR/hermes-companion.sock`
 - `BarWidget.qml`        bar eye icon + popup (toggles, last remarks)   `Service.qml` starts the unit
-- `companion.json`       tunables (tick_seconds, cooldowns) + `vision`/`reasoning` {model, effort, thinking}
+- `companion.json`       tunables (tick_seconds, cooldowns) + `vision`/`reasoning` {model, effort, thinking} + `eyes` (screen-watching on/off at daemon startup, default true)
 - `hermes-companion.service.in` template → `~/.config/systemd/user/hermes-companion.service` (install.sh fills in the Hermes path)
 
 ## Commands

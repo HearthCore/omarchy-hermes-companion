@@ -48,6 +48,10 @@ DEFAULTS = {
     "max_per_hour": 8,
     "notify": True,
     "actions": False,   # let voice/text requests delegate shell/file work to a Hermes subagent
+    # Start with the screen-watching "eyes" on (True, matches the tool's original
+    # always-on behaviour) or off (False), e.g. for on-demand/ask-only use where nothing
+    # persists across restarts anyway and proactive screen ticks aren't wanted by default.
+    "eyes": True,
 }
 
 
@@ -104,7 +108,7 @@ def notify(title: str, body: str, urgency: str = "normal"):
 class Companion:
     def __init__(self, cfg: dict):
         self.cfg = cfg
-        self.state = State()
+        self.state = State(eyes=bool(cfg.get("eyes", True)))
         self.perceiver = Perceiver(cfg["change_threshold"], cfg["max_width"])
         self.policy = SpeechPolicy(PolicyConfig(cfg["min_gap_seconds"], cfg["urgent_gap_seconds"], cfg["max_per_hour"]))
         self.catalog = Catalog()
