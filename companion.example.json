@@ -10,6 +10,7 @@
   "notify": true,
   "actions": false,
   "eyes": true,
+  "language": "auto",
   "vision": {
     "model": "",
     "effort": "low",
