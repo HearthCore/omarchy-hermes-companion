@@ -58,8 +58,7 @@ DEFAULTS = {
     # language regardless of what the user typed/spoke in.
     "language": "auto",
     # Free-text description of who the user is / how they work, injected into the system
-    # prompt in place of the tool's default "solo freelance developer" persona line. Empty
-    # (default) keeps that original line; anything else replaces it entirely.
+    # prompt. Empty (default) uses a neutral one-liner; anything else replaces it entirely.
     "user_context": "",
 }
 

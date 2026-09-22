@@ -38,15 +38,14 @@ DESCRIBE_PROMPT = (
     "would point out. Quote short key strings verbatim (error text, file:line). No preamble, no markdown."
 )
 
-# Default persona line, used when companion.json sets no "user_context" — keeps the
-# out-of-the-box behaviour identical to before this was made configurable.
-_DEFAULT_USER_CONTEXT = "{{USER}} is a solo freelance developer working in an AI-driven, vibe-coding style."
+# Neutral default, used when companion.json sets no "user_context".
+_DEFAULT_USER_CONTEXT = "{{USER}} is a developer."
 
 
 def _user_context(user_context: str) -> str:
     """Free-text description of the user/environment injected near the top of the system
     prompt, so anyone can describe who they are and how they work without editing prompt.md.
-    Empty/unset falls back to the tool's original default persona line."""
+    Empty/unset falls back to a neutral default."""
     user_context = (user_context or "").strip()
     return user_context or _DEFAULT_USER_CONTEXT
 
