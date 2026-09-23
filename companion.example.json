@@ -9,6 +9,9 @@
   "max_per_hour": 8,
   "notify": true,
   "actions": false,
+  "eyes": true,
+  "language": "auto",
+  "user_context": "",
   "toast_position": {
     "anchor": "top-right",
     "margin_x": 0,

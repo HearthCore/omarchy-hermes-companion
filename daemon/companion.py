@@ -48,6 +48,18 @@ DEFAULTS = {
     "max_per_hour": 8,
     "notify": True,
     "actions": False,   # let voice/text requests delegate shell/file work to a Hermes subagent
+    # Start with the screen-watching "eyes" on (True, matches the tool's original
+    # always-on behaviour) or off (False), e.g. for on-demand/ask-only use where nothing
+    # persists across restarts anyway and proactive screen ticks aren't wanted by default.
+    "eyes": True,
+    # Reply language: "auto" (default) asks the model to answer in whichever language
+    # {{USER}} addressed it in, so the companion follows the user without config for the
+    # common case; a fixed value (e.g. "German", "Spanish") pins every reply to that
+    # language regardless of what the user typed/spoke in.
+    "language": "auto",
+    # Free-text description of who the user is / how they work, injected into the system
+    # prompt. Empty (default) uses a neutral one-liner; anything else replaces it entirely.
+    "user_context": "",
     # Where the toast stack spawns and how far it sits from that corner. anchor is one of
     # top-right/top-left/bottom-right/bottom-left; margin_x/margin_y are extra pixels added
     # on top of the bar clearance + base gap the shell already reserves.
@@ -114,7 +126,7 @@ def notify(title: str, body: str, urgency: str = "normal"):
 class Companion:
     def __init__(self, cfg: dict):
         self.cfg = cfg
-        self.state = State()
+        self.state = State(eyes=bool(cfg.get("eyes", True)))
         self.perceiver = Perceiver(cfg["change_threshold"], cfg["max_width"])
         self.policy = SpeechPolicy(PolicyConfig(cfg["min_gap_seconds"], cfg["urgent_gap_seconds"], cfg["max_per_hour"]))
         self.catalog = Catalog()
@@ -131,6 +143,8 @@ class Companion:
         self.agent = self._build_agent()
         self._publish_models()
         self.state.update(actions=bool(cfg.get("actions")))
+        self.state.update(language=cfg.get("language") or "auto")
+        self.state.update(user_context=cfg.get("user_context") or "")
         self.state.update(toast_position=cfg["toast_position"])
         self.voice = None
         self.approver = None
@@ -182,6 +196,25 @@ class Companion:
         self.state.update(actions=bool(enabled))
         audit({"kind": "actions", "enabled": bool(enabled)})
         return f"actions={'on' if enabled else 'off'}"
+
+    def set_language(self, language: str) -> str:
+        language = language.strip() or "auto"
+        self.cfg["language"] = language
+        self._persist_cfg({"language": language})
+        new = self._build_agent()
+        new.history = list(self.agent.history)
+        self.agent = new
+        self.state.update(language=language)
+        return f"language={language}"
+    def set_user_context(self, user_context: str) -> str:
+        user_context = user_context.strip()
+        self.cfg["user_context"] = user_context
+        self._persist_cfg({"user_context": user_context})
+        new = self._build_agent()
+        new.history = list(self.agent.history)
+        self.agent = new
+        self.state.update(user_context=user_context)
+        return f"user_context={user_context or '(default)'}"
 
     # ------------------------------------------------------------ voice
     def start_voice(self):
@@ -317,7 +350,9 @@ class Companion:
     def _build_agent(self) -> CompanionAgent:
         v = _spec(self.cfg["vision"])
         r = _spec(self.cfg["reasoning"]) if self.cfg["reasoning"]["model"] else None
-        return CompanionAgent(v, r, self.cfg["user_name"], actions=bool(self.cfg.get("actions")))
+        return CompanionAgent(v, r, self.cfg["user_name"], actions=bool(self.cfg.get("actions")),
+                               language=str(self.cfg.get("language") or "auto"),
+                               user_context=str(self.cfg.get("user_context") or ""))
 
     def set_role(self, role: str, model: str | None = None, effort: str | None = None, thinking: bool | None = None) -> str:
         if role not in ("vision", "reasoning"):
@@ -409,6 +444,10 @@ class Companion:
             return f"muted={'on' if v else 'off'}"
         if op == "toggle-actions":
             return self.set_actions(not self.cfg.get("actions"))
+        if op == "set-language" and arg:
+            return self.set_language(arg)
+        if op == "set-user-context":
+            return self.set_user_context(arg)
         if op == "decide" and arg:
             from actions import DECISION_FILE
             DECISION_FILE.parent.mkdir(parents=True, exist_ok=True)

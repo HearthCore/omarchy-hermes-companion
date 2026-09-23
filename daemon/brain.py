@@ -38,6 +38,32 @@ DESCRIBE_PROMPT = (
     "would point out. Quote short key strings verbatim (error text, file:line). No preamble, no markdown."
 )
 
+# Neutral default, used when companion.json sets no "user_context".
+_DEFAULT_USER_CONTEXT = "{{USER}} is a developer."
+
+
+def _user_context(user_context: str) -> str:
+    """Free-text description of the user/environment injected near the top of the system
+    prompt, so anyone can describe who they are and how they work without editing prompt.md.
+    Empty/unset falls back to a neutral default."""
+    user_context = (user_context or "").strip()
+    return user_context or _DEFAULT_USER_CONTEXT
+
+
+def _language_rule(language: str) -> str:
+    """Reply-language instruction, shared by the system prompt and every per-turn nudge.
+
+    "auto" (default) keeps the companion's spirit language-agnostic: it follows whichever
+    language {{USER}} actually used, so nothing has to be configured for the common case
+    and nothing here hardcodes a single language. A fixed value pins every reply instead —
+    useful when the user always addresses it in a language other than English but the vision
+    model's screen narration or transcription occasionally slips into English.
+    """
+    language = (language or "auto").strip()
+    if language.lower() in ("", "auto", "user", "match"):
+        return "Reply in the language {{USER}} addressed you in — match their language, don't translate it."
+    return "Reply in " + language + ", regardless of the language {{USER}} addressed you in."
+
 
 @dataclass
 class ModelSpec:
@@ -93,9 +119,17 @@ def _make_agent(spec: ModelSpec, user_name: str, system_prompt: str, tools: bool
 
 
 class CompanionAgent:
-    def __init__(self, vision: ModelSpec, reasoning: Optional[ModelSpec], user_name: str, actions: bool = False):
+    def __init__(self, vision: ModelSpec, reasoning: Optional[ModelSpec], user_name: str,
+                 actions: bool = False, language: str = "auto", user_context: str = ""):
         self.user_name = user_name
-        self.system_prompt = PROMPT_FILE.read_text().replace("{{USER}}", user_name)
+        self.language_rule = _language_rule(language).replace("{{USER}}", user_name)
+        # {{USER}} inside the resolved user-context text (default or custom) must expand to
+        # the real name too, so replace {{USER}} first, then splice in {{USER_CONTEXT}}.
+        resolved_context = _user_context(user_context).replace("{{USER}}", user_name)
+        self.system_prompt = (PROMPT_FILE.read_text()
+                               .replace("{{USER}}", user_name)
+                               .replace("{{LANGUAGE_RULE}}", self.language_rule)
+                               .replace("{{USER_CONTEXT}}", resolved_context))
         self.history: list[dict[str, Any]] = []
         self._lock = threading.Lock()
         self.vision = vision
@@ -176,6 +210,7 @@ class CompanionAgent:
         tag = "VOICE REQUEST" if source == "voice" else "TEXT REQUEST"
         msg = (
             f"[{tag} from {self.user_name}]\n{transcript}\n\n"
-            "Reply in plain spoken English (no JSON, no markdown, no lists), 1-4 sentences unless more is truly needed."
+            f"Reply in plain spoken prose (no JSON, no markdown, no lists), 1-4 sentences unless "
+            f"more is truly needed. {self.language_rule}"
         )
         return self._turn(msg, agent=self.actor if self.actions else None)

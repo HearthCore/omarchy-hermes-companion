@@ -1,12 +1,14 @@
 # Hermes Companion (Omarchy plugin)
 
-![Hermes Companion widget on the Omarchy desktop](preview.png)
+![Hermes Companion panel on the Omarchy desktop](preview.jpg)
 
 Always-on Hermes agent: watches the focused monitor, speaks up when it judges it useful,
 answers voice requests on demand (right-click the bar icon, the Listen button, or Super+Alt+H). Models: a **vision** model (must accept images; sees the screen) and an optional separate **reasoning** model
 (default = same as vision). Lists are built from every provider Hermes has credentials for, grouped by provider,
 with vision capability from models.dev / the Nous catalog. When the two differ, the vision model describes each
-frame in a stateless one-shot and the reasoning model runs the persistent conversation on that text. Read-only tools only.
+frame in a stateless one-shot and the reasoning model runs the persistent conversation on that text.
+Tools are read-only (web search/extract, file read/search) unless you turn on **Actions** (below). It answers in the
+language you use and can be told who you are (`user_context`) — see *Configuration*.
 
 ## Requirements
 - Omarchy 4.x (`omarchy`, `omarchy-shell`, `grim`, `hyprctl`, `notify-send`, PipeWire tools) — `install.sh` offers `omarchy pkg add` for missing packages.
@@ -81,17 +83,43 @@ Frames are skipped for password managers, private browsing, banking/OTP windows 
 - `daemon/brain.py`      persistent Hermes AIAgent (web/file read-only), JSON tick protocol; native vs split vision
 - `daemon/catalog.py`    provider/model catalog with vision flags (Hermes credentials + models.dev + Nous catalog)
 - `daemon/voice.py`      on-demand Hermes VAD capture → local faster-whisper → edge TTS
+- `daemon/actions.py`    tiered approval policy for the helper subagent's commands (see *Actions*)
+- `daemon/prompt.md`     system prompt; `{{USER}}`, `{{USER_CONTEXT}}`, `{{LANGUAGE_RULE}}` are filled from `companion.json`
 - `daemon/policy.py`     cooldowns / fullscreen / call / idle gating for unprompted speech
 - `daemon/state.py`      `~/.local/state/hermes-companion/state.json` + `$XDG_RUNTIME_DIR/hermes-companion.sock`
-- `BarWidget.qml`        bar eye icon + popup (toggles, last remarks)   `Service.qml` starts the unit
-- `companion.json`       tunables (tick_seconds, cooldowns) + `vision`/`reasoning` {model, effort, thinking} + `toast_position` {anchor, margin_x, margin_y}
+- `BarWidget.qml`        bar eye icon + panel (toggles, model pickers, text input, recent replies)   `Service.qml` starts the unit, renders toasts
+- `companion.json`       see *Configuration*
 - `hermes-companion.service.in` template → `~/.config/systemd/user/hermes-companion.service` (install.sh fills in the Hermes path)
+
+## Configuration
+`~/.config/omarchy/plugins/hermes.companion/companion.json` (start from `companion.example.json`; the panel and `--ctl set-*` write to it too).
+
+| Key | Default | Meaning |
+|---|---|---|
+| `user_name` | `$USER` capitalised | how the companion addresses you |
+| `user_context` | `""` | free text about who you are / how you work, injected into the system prompt (empty = "is a developer") |
+| `language` | `"auto"` | reply language: `auto` follows whatever language you speak/type; a name (`"German"`) pins it |
+| `eyes` | `true` | screen-watching on at daemon start (`toggle-eyes` / Super+Alt+E changes it at runtime only) |
+| `actions` | `false` | let requests delegate shell/file work to a helper subagent (see *Actions*) |
+| `notify` | `true` | also send spoken remarks as desktop notifications |
+| `toast_position` | `{"anchor": "top-right", "margin_x": 0, "margin_y": 0}` | corner for toasts (`top-right`, `top-left`, `bottom-right`, `bottom-left`) plus extra pixels from that corner; applies without restart |
+| `vision` / `reasoning` | `{model, effort, thinking}` | `provider:model`, `low|medium|high`, extended thinking on/off; empty reasoning model = same as vision |
+| `tick_seconds` | `25` | screen check interval |
+| `change_threshold` | `12` | dHash distance below which a frame counts as unchanged; unchanged screens are only re-checked every ~2 min |
+| `max_width` | `1280` | frames are downscaled to this width before upload |
+| `idle_skip_seconds` | `300` | no ticks after this much input idleness |
+| `min_gap_seconds` / `urgent_gap_seconds` / `max_per_hour` | `300` / `60` / `8` | rate limits for unprompted speech |
+| `hermes_dir` | `~/.hermes/hermes-agent` | Hermes checkout (written by `install.sh`) |
 
 ## Commands
 ```
 CTL="$HOME/.hermes/hermes-agent/venv/bin/python $HOME/.config/omarchy/plugins/hermes.companion/daemon/companion.py --ctl"
-$CTL status | toggle-eyes | listen | toggle-mute | toggle-toasts | toggle-actions | decide <yes|no> | hush | tick | models | set-vision <provider:model> | set-reasoning <provider:model|same> | set-{vision,reasoning}-effort <low|medium|high> | toggle-{vision,reasoning}-thinking | say <text> | ask <text> | toast <text> | set-toast-position <anchor>[,<margin_x>[,<margin_y>]] | quit
+$CTL status | toggle-eyes | listen | toggle-mute | toggle-toasts | toggle-actions | decide <yes|no> | hush | tick | models | set-vision <provider:model> | set-reasoning <provider:model|same> | set-{vision,reasoning}-effort <low|medium|high> | toggle-{vision,reasoning}-thinking | set-language <auto|language name> | set-user-context <text|(empty)> | set-toast-position <anchor>[,<margin_x>[,<margin_y>]] | say <text> | ask <text> | toast <text> | quit
+# ask / text: same as speaking to it (reply is toasted + spoken); text is what the panel's input box sends
 journalctl --user -fu hermes-companion
 ```
 Keys: Super+Alt+H listen · Super+Alt+E eyes · Super+Alt+S hush. Bar icon: left = panel, right = listen, middle = hush.
+
+## Contributing
+See [CONTRIBUTING.md](CONTRIBUTING.md). Every merge to `main` is what `omarchy plugin update` installs.
 

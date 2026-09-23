@@ -1,0 +1,26 @@
+name: check
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Python compiles
+        run: python -m py_compile daemon/*.py
+      - name: JSON parses
+        run: |
+          python -m json.tool manifest.json > /dev/null
+          python -m json.tool companion.example.json > /dev/null
+      - name: No leftover conflict markers
+        run: |
+          ! grep -rn --exclude-dir=.git -e '^<<<<<<< ' -e '^>>>>>>> ' .
+      - name: Every --ctl op in the daemon is documented in the README
+        run: python .github/scripts/check_ctl_docs.py
